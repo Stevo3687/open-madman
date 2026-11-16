@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g -Dorg.gradle.daemon=false -Dkotlin.daemon.jvm.options=-Xmx3g"
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -22,9 +24,9 @@ jobs:
         run: |
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
-            ./gradlew assembleDebug
+            ./gradlew assembleDebug --no-daemon --max-workers=2
           else
-            gradle assembleDebug
+            gradle assembleDebug --no-daemon --max-workers=2
           fi
 
       - name: Upload APK
