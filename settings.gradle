@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Required by the OpenDroid runtime dependencies.
+        maven { url = 'https://jitpack.io' }
     }
 }
 

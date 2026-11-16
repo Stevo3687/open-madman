@@ -1,0 +1,19 @@
+// Modified for Open Jarvis: package namespace remapped from com.opendroid to com.opendroid_core. Copyright 2026 OpenDroid Contributors.
+package com.opendroid_core.ai.data.models
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class ChatMessage(
+    val id: String,
+    val text: String,
+    val sender: Sender,
+    val timestamp: Long = System.currentTimeMillis(),
+    val modelBadge: String? = null,
+    val imageBase64: String? = null,
+    val contactPickerData: String? = null
+) {
+    enum class Sender {
+        USER, AGENT
+    }
+}
