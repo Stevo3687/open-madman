@@ -204,16 +204,75 @@ class AutomationManager(private val context: Context) {
         return null
     }
     
+    @Entity(tableName = "automations")
     data class Automation(
-        val id: String,
+        @PrimaryKey val id: String,
         val name: String,
         val command: String,
-        val schedule: AutomationSchedule,
+        val scheduleType: String,
+        val scheduleHour: Int = 0,
+        val scheduleMinute: Int = 0,
+        val scheduleDayOfWeek: Int = 0,
+        val scheduleIntervalMs: Long = 0,
         val enabled: Boolean = true,
         val lastRun: Long? = null,
         val lastResult: String? = null,
         val runCount: Int = 0
-    )
+    ) {
+        constructor(
+            id: String,
+            name: String,
+            command: String,
+            schedule: AutomationSchedule,
+            enabled: Boolean = true,
+            lastRun: Long? = null,
+            lastResult: String? = null,
+            runCount: Int = 0
+        ) : this(
+            id = id,
+            name = name,
+            command = command,
+            scheduleType = when (schedule) {
+                is AutomationSchedule.Daily -> "daily"
+                is AutomationSchedule.Weekly -> "weekly"
+                is AutomationSchedule.Interval -> "interval"
+                is AutomationSchedule.Once -> "once"
+            },
+            scheduleHour = when (schedule) {
+                is AutomationSchedule.Daily -> schedule.hour
+                is AutomationSchedule.Weekly -> schedule.hour
+                else -> 0
+            },
+            scheduleMinute = when (schedule) {
+                is AutomationSchedule.Daily -> schedule.minute
+                is AutomationSchedule.Weekly -> schedule.minute
+                else -> 0
+            },
+            scheduleDayOfWeek = when (schedule) {
+                is AutomationSchedule.Weekly -> schedule.dayOfWeek
+                else -> 0
+            },
+            scheduleIntervalMs = when (schedule) {
+                is AutomationSchedule.Interval -> schedule.intervalMs
+                is AutomationSchedule.Once -> schedule.atMs
+                else -> 0
+            },
+            enabled = enabled,
+            lastRun = lastRun,
+            lastResult = lastResult,
+            runCount = runCount
+        )
+
+        @get:Ignore
+        val schedule: AutomationSchedule
+            get() = when (scheduleType) {
+                "daily" -> AutomationSchedule.Daily(scheduleHour, scheduleMinute)
+                "weekly" -> AutomationSchedule.Weekly(scheduleDayOfWeek, scheduleHour, scheduleMinute)
+                "interval" -> AutomationSchedule.Interval(scheduleIntervalMs)
+                "once" -> AutomationSchedule.Once(scheduleIntervalMs)
+                else -> error("Unknown automation schedule type: $scheduleType")
+            }
+    }
     
     sealed class AutomationSchedule {
         data class Daily(val hour: Int, val minute: Int) : AutomationSchedule()

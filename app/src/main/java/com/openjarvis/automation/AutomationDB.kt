@@ -5,22 +5,6 @@ import androidx.room.*
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 
-@Entity(tableName = "automations")
-data class AutomationEntity(
-    @PrimaryKey val id: String,
-    val name: String,
-    val command: String,
-    val scheduleType: String,
-    val scheduleHour: Int = 0,
-    val scheduleMinute: Int = 0,
-    val scheduleDayOfWeek: Int = 0,
-    val scheduleIntervalMs: Long = 0,
-    val enabled: Boolean = true,
-    val lastRun: Long? = null,
-    val lastResult: String? = null,
-    val runCount: Int = 0
-)
-
 @Dao
 interface AutomationDao {
     @Query("SELECT * FROM automations ORDER BY name")
@@ -39,7 +23,7 @@ interface AutomationDao {
     suspend fun delete(id: String)
 }
 
-@Database(entities = [AutomationEntity::class], version = 1)
+@Database(entities = [AutomationManager.Automation::class], version = 1)
 abstract class AutomationDB : RoomDatabase() {
     abstract fun automationDao(): AutomationDao
     
