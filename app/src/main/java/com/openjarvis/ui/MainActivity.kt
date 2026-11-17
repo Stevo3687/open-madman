@@ -1,5 +1,6 @@
 package com.openjarvis.ui
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.SharedPreferences
@@ -7,6 +8,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
@@ -32,6 +34,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var assistantUpgrade: AssistantUpgrade
     private var activePersonaState by mutableStateOf<AssistantUpgrade.Persona?>(null)
     private var personasState by mutableStateOf<List<AssistantUpgrade.Persona>>(emptyList())
+    private var permissionRefresh by mutableIntStateOf(0)
+    private val microphonePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            startOverlayService(voiceEnabled = granted)
+            if (!granted) {
+                Toast.makeText(this, "Voice input unavailable; you can still type commands.", Toast.LENGTH_LONG).show()
+            }
+        }
     private val personaPreferencesListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
         runOnUiThread { refreshPersonaState() }
     }
@@ -49,7 +59,6 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             OpenJarvisTheme {
-                val context = LocalContext.current
                 var recentTasks by remember { mutableStateOf<List<TaskNode>>(emptyList()) }
                 val activePersona = activePersonaState ?: assistantUpgrade.activePersona
                 val personas = personasState
@@ -58,8 +67,12 @@ class MainActivity : ComponentActivity() {
                     recentTasks = graphifyRepo.getRecentTasks(10)
                 }
                 
-                val accessibilityEnabled = isAccessibilityServiceEnabled()
-                val overlayEnabled = Settings.canDrawOverlays(this)
+                val accessibilityEnabled = remember(permissionRefresh) {
+                    isAccessibilityServiceEnabled()
+                }
+                val overlayEnabled = remember(permissionRefresh) {
+                    Settings.canDrawOverlays(this@MainActivity)
+                }
                 
                 val agentState by agentCore.state.collectAsState()
                 
@@ -105,6 +118,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        permissionRefresh++
+    }
+
     override fun onStop() {
         if (::assistantUpgrade.isInitialized) {
             getSharedPreferences("assistant_upgrade", MODE_PRIVATE)
@@ -139,7 +157,17 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun startOverlayService() {
-        startService(Intent(this, OverlayService::class.java))
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            startOverlayService(voiceEnabled = true)
+        } else {
+            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    private fun startOverlayService(voiceEnabled: Boolean) {
+        OverlayService.start(this, voiceEnabled)
         Toast.makeText(this, "${assistantUpgrade.activePersona.displayName} is active", Toast.LENGTH_SHORT).show()
     }
     

@@ -55,6 +55,7 @@ fun FloatingOverlayWidget(
     suggestions: List<String> = emptyList(),
     onCommand: (String) -> Unit,
     onCollapse: () -> Unit,
+    onExpandedChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(false) }
@@ -146,6 +147,7 @@ fun FloatingOverlayWidget(
                 onCollapse = {
                     voiceManager?.stopSpeaking()
                     isExpanded = false
+                    onExpandedChanged(false)
                     onCollapse()
                 },
                 modifier = modifier
@@ -153,7 +155,10 @@ fun FloatingOverlayWidget(
         } else {
             CollapsedPill(
                 agentState = agentState,
-                onClick = { isExpanded = true },
+                onClick = {
+                    isExpanded = true
+                    onExpandedChanged(true)
+                },
                 modifier = modifier
             )
         }

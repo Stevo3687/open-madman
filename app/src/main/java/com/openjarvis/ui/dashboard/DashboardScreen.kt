@@ -108,6 +108,15 @@ fun DashboardScreen(
             }
             
             Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = onStartOverlay,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Open Assistant")
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
             
             StatsRow(tasks = recentTasks, alpha = statsAlpha)
             
