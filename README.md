@@ -31,6 +31,8 @@ Open Jarvis is an autonomous Android AI agent that accepts natural language
 | LLM Wiring (Groq, Gemini, Anthropic, OpenRouter, Custom) | ✅ Live | M2 |
 | OCR + Screen Vision | ✅ Live | M2 |
 | Voice Input (STT) + TTS | ✅ Live | M3 |
+| Multi-character Personas + Custom Names | ✅ Live | M8 |
+| Local Android Device Controls | ✅ Live | M8 |
 | Graphify Memory Graph | ✅ Live | M4 |
 | Pattern Learning + Smart Suggestions | ✅ Live | M4 |
 | Termux CLI Bridge | ✅ Live | M5 |
@@ -173,6 +175,21 @@ jarvis "open youtube"
 jarvis status
 jarvis history
 ```
+
+## Personas & Local Device Commands
+
+Use the character selector on the dashboard to choose Jarvis, Friday, Nova, or Ghost, or create a custom persona with its own name, system prompt, wake word, and voice settings. You can also switch or rename the active persona with text or voice commands such as **“switch to Friday”**, **“list characters”**, and **“call yourself Alex.”**
+
+Common device actions run locally without an LLM request:
+
+- **“flashlight on”** / **“flashlight off”**
+- **“volume up”**, **“volume down”**, **“mute volume”**, or **“max volume”**
+- **“set alarm for 07:30”** or **“set timer for 5 minutes”**
+- **“open camera”** or **“open [app name]”**
+- **“Wi-Fi settings”**, **“Bluetooth settings”**, **“display settings”**, or **“battery settings”**
+- **“google [query]”** / **“search for [query]”** and **“battery status”**
+
+Android may ask for runtime camera permission before flashlight control is available.
 
 ---
 

@@ -21,6 +21,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -28,8 +30,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openjarvis.AssistantUpgrade
 import com.openjarvis.graphify.GraphifyRepository
 import com.openjarvis.graphify.nodes.AppNode
 import com.openjarvis.graphify.nodes.TaskNode
@@ -42,6 +46,11 @@ fun DashboardScreen(
     onStartOverlay: () -> Unit,
     onOpenSettings: () -> Unit,
     graphifyRepo: GraphifyRepository,
+    activePersona: AssistantUpgrade.Persona,
+    personas: List<AssistantUpgrade.Persona>,
+    onSelectPersona: (String) -> Unit,
+    onSavePersona: (AssistantUpgrade.Persona) -> Unit,
+    onAddPersona: (String, String, Float, Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var recentTasks by remember { mutableStateOf<List<TaskNode>>(emptyList()) }
@@ -52,6 +61,7 @@ fun DashboardScreen(
     var statsAlpha by remember { mutableFloatStateOf(0f) }
     var tasksAlpha by remember { mutableFloatStateOf(0f) }
     var appsAlpha by remember { mutableFloatStateOf(0f) }
+    var showCharacterDialog by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
         recentTasks = graphifyRepo.getRecentTasks(10)
@@ -86,7 +96,16 @@ fun DashboardScreen(
         ) {
             Spacer(modifier = Modifier.height(56.dp))
             
-            HeroSection(isSystemActive = isSystemActive)
+            HeroSection(isSystemActive = isSystemActive, assistantName = activePersona.displayName)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = { showCharacterDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Character & Name: ${activePersona.displayName}")
+            }
             
             Spacer(modifier = Modifier.height(16.dp))
             
@@ -107,7 +126,137 @@ fun DashboardScreen(
             onSettingsClick = onOpenSettings,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        if (showCharacterDialog) {
+            CharacterSelectorDialog(
+                activePersona = activePersona,
+                personas = personas,
+                onDismiss = { showCharacterDialog = false },
+                onSelectPersona = {
+                    onSelectPersona(it)
+                    showCharacterDialog = false
+                },
+                onSavePersona = onSavePersona,
+                onAddPersona = onAddPersona
+            )
+        }
     }
+}
+
+@Composable
+private fun CharacterSelectorDialog(
+    activePersona: AssistantUpgrade.Persona,
+    personas: List<AssistantUpgrade.Persona>,
+    onDismiss: () -> Unit,
+    onSelectPersona: (String) -> Unit,
+    onSavePersona: (AssistantUpgrade.Persona) -> Unit,
+    onAddPersona: (String, String, Float, Float) -> Unit
+) {
+    var selectedPersona by remember(activePersona.id) { mutableStateOf(activePersona) }
+    var displayName by remember(activePersona.id) { mutableStateOf(activePersona.displayName) }
+    var systemPrompt by remember(activePersona.id) { mutableStateOf(activePersona.systemPrompt) }
+    var pitch by remember(activePersona.id) { mutableFloatStateOf(activePersona.pitch) }
+    var speechRate by remember(activePersona.id) { mutableFloatStateOf(activePersona.speechRate) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Character & Name") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 480.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                personas.forEach { persona ->
+                    FilledTonalButton(
+                        onClick = {
+                            selectedPersona = persona
+                            displayName = persona.displayName
+                            systemPrompt = persona.systemPrompt
+                            pitch = persona.pitch
+                            speechRate = persona.speechRate
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = if (persona.id == selectedPersona.id) "Selected: ${persona.displayName}"
+                            else persona.displayName
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = displayName,
+                    onValueChange = { displayName = it },
+                    label = { Text("Display name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = systemPrompt,
+                    onValueChange = { systemPrompt = it },
+                    label = { Text("Character instructions") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text("TTS pitch: ${"%.2f".format(pitch)}")
+                Slider(
+                    value = pitch,
+                    onValueChange = { pitch = it },
+                    valueRange = 0.5f..2.0f
+                )
+                Text("Speech rate: ${"%.2f".format(speechRate)}")
+                Slider(
+                    value = speechRate,
+                    onValueChange = { speechRate = it },
+                    valueRange = 0.5f..2.0f
+                )
+            }
+        },
+        confirmButton = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    onClick = { onSelectPersona(selectedPersona.id) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Use selected character")
+                }
+                TextButton(
+                    onClick = {
+                        val renamed = displayName.trim()
+                        onSavePersona(
+                            selectedPersona.copy(
+                                displayName = renamed,
+                                wakeWords = selectedPersona.wakeWords
+                                    .filterNot { it.equals(selectedPersona.displayName, ignoreCase = true) } +
+                                    renamed,
+                                systemPrompt = systemPrompt.trim(),
+                                pitch = pitch,
+                                speechRate = speechRate
+                            )
+                        )
+                    },
+                    enabled = displayName.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Save changes")
+                }
+                TextButton(
+                    onClick = { onAddPersona(displayName, systemPrompt, pitch, speechRate) },
+                    enabled = displayName.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Add as custom character")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }
 
 @Composable
@@ -142,7 +291,7 @@ private fun OrbBackground() {
 }
 
 @Composable
-private fun HeroSection(isSystemActive: Boolean) {
+private fun HeroSection(isSystemActive: Boolean, assistantName: String) {
     Column {
         Surface(
             shape = RoundedCornerShape(999.dp),
@@ -174,7 +323,7 @@ private fun HeroSection(isSystemActive: Boolean) {
                     colors = listOf(VoidColor.Violet, VoidColor.Cyan)
                 )
             )) {
-                append("JARVIS")
+                append(assistantName.uppercase())
             }
         }
         
@@ -276,7 +425,7 @@ private fun StatsRow(tasks: List<TaskNode>, alpha: Float) {
         label = "count"
     )
     
-    Column(alpha = alpha) {
+    Column(modifier = Modifier.alpha(alpha)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -336,7 +485,7 @@ private fun StatCard(count: Int, label: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun RecentTasksSection(tasks: List<TaskNode>, alpha: Float) {
-    Column(alpha = alpha) {
+    Column(modifier = Modifier.alpha(alpha)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -505,7 +654,7 @@ private fun AppInitialBadge(label: String) {
 
 @Composable
 private fun QuickAppsSection(apps: List<AppNode>, alpha: Float) {
-    Column(alpha = alpha) {
+    Column(modifier = Modifier.alpha(alpha)) {
         Text(
             text = "QUICK APPS",
             style = TextStyle(

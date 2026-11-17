@@ -23,7 +23,6 @@ class ScreenWatcher(private val context: Context, private val agentCore: com.ope
     val state: StateFlow<WatcherState> = _state
     
     private val rules = mutableListOf<WatchRule>()
-    private val screenReader = ScreenReader(context)
     private val graphifyRepo = GraphifyRepository(context)
     private val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
     
@@ -65,7 +64,8 @@ class ScreenWatcher(private val context: Context, private val agentCore: com.ope
             val battery = getBatteryLevel()
             val now = System.currentTimeMillis()
             
-            for (rule in rules) {
+            for (index in rules.indices) {
+                val rule = rules[index]
                 if (!rule.enabled) continue
                 if (now - rule.lastTriggered < rule.cooldownMs) continue
                 
@@ -87,7 +87,7 @@ class ScreenWatcher(private val context: Context, private val agentCore: com.ope
                 
                 if (triggered) {
                     executeAction(rule.action, screenText)
-                    rule.lastTriggered = now
+                    rules[index] = rule.copy(lastTriggered = now)
                 }
             }
         } catch (e: Exception) {
@@ -116,7 +116,7 @@ class ScreenWatcher(private val context: Context, private val agentCore: com.ope
     
     private fun getCurrentScreenText(): String {
         return try {
-            screenReader.extractAllText()
+            JarvisAccessibilityService.instance?.let { ScreenReader(it).extractAllText() }.orEmpty()
         } catch (e: Exception) {
             ""
         }

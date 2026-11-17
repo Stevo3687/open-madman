@@ -23,6 +23,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.graphics.toColorInt
 import com.openjarvis.R
+import com.openjarvis.ui.MainActivity
 import com.opendroid_core.ai.core.agent.AgentLoop
 import com.opendroid_core.ai.core.agent.AgentState
 import com.opendroid_core.ai.core.service.OpenDroidService
@@ -332,7 +333,7 @@ class OpenDroidAccessibilityService : AccessibilityService() {
     }
 
     private fun openMainActivityAction() {
-        val intent = Intent(this, com.opendroid_core.ai.MainActivity::class.java).apply {
+        val intent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         try {

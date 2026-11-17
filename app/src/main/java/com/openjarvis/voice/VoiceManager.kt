@@ -2,6 +2,7 @@ package com.openjarvis.voice
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.openjarvis.AssistantUpgrade
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.CoroutineScope
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 
 class VoiceManager(private val context: Context) {
 
@@ -34,6 +36,7 @@ class VoiceManager(private val context: Context) {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
+    private val assistantUpgrade = AssistantUpgrade(context)
     private val sttEngine = AndroidSTTEngine(context)
     private val ttsEngine = AndroidTTSEngine(context)
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -50,8 +53,7 @@ class VoiceManager(private val context: Context) {
     }
 
     init {
-        // Apply saved settings
-        ttsEngine.setSpeechRate(getSpeechRate())
+        applyActivePersonaVoice()
     }
 
     fun isVoiceEnabled(): Boolean = prefs.getBoolean(KEY_VOICE_ENABLED, false)
@@ -101,7 +103,7 @@ class VoiceManager(private val context: Context) {
                     if (!text.isNullOrBlank()) {
                         _state.value = VoiceState.Result(text)
                         if (isSpeakResultsEnabled()) {
-                            ttsEngine.speak("Heard: $text")
+                            speak("Heard: $text")
                         }
                     } else {
                         _state.value = VoiceState.Error("Could not understand audio")
@@ -141,7 +143,7 @@ class VoiceManager(private val context: Context) {
                     if (!text.isNullOrBlank()) {
                         _state.value = VoiceState.Result(text)
                         if (isSpeakResultsEnabled()) {
-                            ttsEngine.speak("Heard: $text")
+                            speak("Heard: $text")
                         }
                     } else {
                         _state.value = VoiceState.Idle
@@ -156,8 +158,15 @@ class VoiceManager(private val context: Context) {
 
     fun speak(text: String) {
         if (isSpeakResultsEnabled()) {
+            applyActivePersonaVoice()
             ttsEngine.speak(text)
         }
+    }
+
+    private fun applyActivePersonaVoice() {
+        val persona = assistantUpgrade.activePersona
+        ttsEngine.setPitch(persona.pitch)
+        ttsEngine.setSpeechRate(persona.speechRate)
     }
 
     fun stopSpeaking() {

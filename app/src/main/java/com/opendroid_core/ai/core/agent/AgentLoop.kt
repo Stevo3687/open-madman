@@ -1,6 +1,7 @@
 // Modified for Open Jarvis: package namespace remapped from com.opendroid to com.opendroid_core. Copyright 2026 OpenDroid Contributors.
 package com.opendroid_core.ai.core.agent
 
+import com.openjarvis.AssistantUpgrade
 import android.content.Context
 import com.opendroid_core.ai.actions.ActionDispatcher
 import com.opendroid_core.ai.actions.base.ActionResult
@@ -742,6 +743,20 @@ class AgentLoop @Inject constructor(
                 _chatError.value = null
                 _agentState.value = AgentState.Thinking
 
+                AssistantUpgrade(context).handleCommand(query)?.let { response ->
+                    val reply = ChatMessage(
+                        id = UUID.randomUUID().toString(),
+                        text = response,
+                        sender = ChatMessage.Sender.AGENT,
+                        modelBadge = null
+                    )
+                    memoryManager.storeMessage(reply, sessionId)
+                    conversationRepository.insertMessage(sessionId, reply)
+                    onSpeakCallback?.invoke(response)
+                    _agentState.value = AgentState.Idle
+                    return
+                }
+
                 // 0. Check if this is a complex, multi-step query
                 //    If so, skip ALL shortcuts and let the LLM planner handle it properly
                 val complexity = intentClassifier.classifyComplexity(query)
@@ -816,7 +831,7 @@ class AgentLoop @Inject constructor(
                 if (requiresAction) {
                     generatePlan(userMsg, context, sessionId)
                 } else {
-                    executeSimpleQuery(userMsg, sessionId)
+                    executeSimpleQuery(userMsg, sessionId, context)
                 }
     }
 
@@ -890,7 +905,7 @@ class AgentLoop @Inject constructor(
         _agentState.value = AgentState.Error(error.title())
     }
 
-    private suspend fun executeSimpleQuery(userMsg: ChatMessage, sessionId: String) {
+    private suspend fun executeSimpleQuery(userMsg: ChatMessage, sessionId: String, context: Context) {
         val runId = UUID.randomUUID().toString()
         val requestId = userMsg.id
         try {
@@ -898,8 +913,10 @@ class AgentLoop @Inject constructor(
             val relevantContext = memoryManager.getRelevantContext(userMsg.text)
             val autoModeLabel = settingsRepository.llmConfig.first().approvalSettings().mode.name
 
+            val persona = AssistantUpgrade(context).activePersona
             val systemPrompt = """
-                You are OpenDroid, a friendly and helpful Android AI assistant.
+                ${persona.systemPrompt}
+                You are ${persona.displayName}, a friendly and helpful Android AI assistant.
                 Talk like a real person — warm, casual, and natural. Avoid sounding robotic.
                 Keep your answers short and to the point, but feel free to be friendly.
                 
@@ -1181,7 +1198,7 @@ class AgentLoop @Inject constructor(
         } catch (e: Exception) {
             android.util.Log.e("AgentLoop", "Failed to log plan generation failure: ${e.localizedMessage}")
         }
-        executeSimpleQuery(userMsg, sessionId)
+        executeSimpleQuery(userMsg, sessionId, context)
     }
 
     /**

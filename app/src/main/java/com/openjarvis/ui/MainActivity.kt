@@ -2,17 +2,20 @@ package com.openjarvis.ui
 
 import android.content.ComponentName
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import com.openjarvis.AssistantUpgrade
 import com.openjarvis.accessibility.JarvisAccessibilityService
 import com.openjarvis.agent.AgentCore
 import com.openjarvis.agent.AgentState
@@ -26,6 +29,12 @@ class MainActivity : ComponentActivity() {
     
     private lateinit var graphifyRepo: GraphifyRepository
     private lateinit var agentCore: AgentCore
+    private lateinit var assistantUpgrade: AssistantUpgrade
+    private var activePersonaState by mutableStateOf<AssistantUpgrade.Persona?>(null)
+    private var personasState by mutableStateOf<List<AssistantUpgrade.Persona>>(emptyList())
+    private val personaPreferencesListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        runOnUiThread { refreshPersonaState() }
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,11 +44,15 @@ class MainActivity : ComponentActivity() {
         
         graphifyRepo = GraphifyRepository(this)
         agentCore = AgentCore(this)
+        assistantUpgrade = AssistantUpgrade(this)
+        refreshPersonaState()
         
         setContent {
             OpenJarvisTheme {
                 val context = LocalContext.current
                 var recentTasks by remember { mutableStateOf<List<TaskNode>>(emptyList()) }
+                val activePersona = activePersonaState ?: assistantUpgrade.activePersona
+                val personas = personasState
                 
                 LaunchedEffect(Unit) {
                     recentTasks = graphifyRepo.getRecentTasks(10)
@@ -62,11 +75,48 @@ class MainActivity : ComponentActivity() {
                         onStartOverlay = { startOverlayService() },
                         onOpenSettings = { openSettings() },
                         graphifyRepo = graphifyRepo,
+                        activePersona = activePersona,
+                        personas = personas,
+                        onSelectPersona = { id ->
+                            assistantUpgrade.switchPersona(id)
+                            refreshPersonaState()
+                        },
+                        onSavePersona = { persona ->
+                            assistantUpgrade.savePersona(persona)
+                            refreshPersonaState()
+                        },
+                        onAddPersona = { name, prompt, pitch, speechRate ->
+                            assistantUpgrade.addCustomPersona(name, prompt, pitch, speechRate)
+                            refreshPersonaState()
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (::assistantUpgrade.isInitialized) {
+            getSharedPreferences("assistant_upgrade", MODE_PRIVATE)
+                .registerOnSharedPreferenceChangeListener(personaPreferencesListener)
+            refreshPersonaState()
+        }
+    }
+
+    override fun onStop() {
+        if (::assistantUpgrade.isInitialized) {
+            getSharedPreferences("assistant_upgrade", MODE_PRIVATE)
+                .unregisterOnSharedPreferenceChangeListener(personaPreferencesListener)
+        }
+        super.onStop()
+    }
+
+    private fun refreshPersonaState() {
+        if (!::assistantUpgrade.isInitialized) return
+        activePersonaState = assistantUpgrade.activePersona
+        personasState = assistantUpgrade.getPersonas()
     }
     
     private fun isAccessibilityServiceEnabled(): Boolean {
@@ -90,7 +140,7 @@ class MainActivity : ComponentActivity() {
     
     private fun startOverlayService() {
         startService(Intent(this, OverlayService::class.java))
-        Toast.makeText(this, "Jarvis is active", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "${assistantUpgrade.activePersona.displayName} is active", Toast.LENGTH_SHORT).show()
     }
     
     private fun openSettings() {

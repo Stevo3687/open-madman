@@ -4,6 +4,7 @@ import android.app.Notification
 import android.content.pm.PackageManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.openjarvis.accessibility.JarvisAccessibilityService
 import com.openjarvis.graphify.GraphifyRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,10 +36,25 @@ class JarvisNotificationListener : NotificationListenerService() {
             "com.stripe",
             "com.razorpay"
         )
+        private val messagingApps = listOf(
+            "com.whatsapp",
+            "com.google.android.apps.messaging",
+            "com.samsung.android.messaging",
+            "com.instagram.android",
+            "com.facebook.orca",
+            "org.telegram.messenger",
+            "com.slack",
+            "com.discord"
+        )
         
         fun shouldProcessNotification(packageName: String): Boolean {
             return packageName !in PRIVACY_PROTECTED_APPS
         }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        graphifyRepo = GraphifyRepository(this)
     }
     
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -51,8 +67,10 @@ class JarvisNotificationListener : NotificationListenerService() {
         
         scope.launch {
             try {
-                graphifyRepo?.logNotification(
-                    "${parsed.packageName}: ${parsed.title}"
+                graphifyRepo?.logTask(
+                    command = "${parsed.packageName}: ${parsed.title}",
+                    result = "notification posted",
+                    provider = "notifications"
                 )
             } catch (e: Exception) { }
         }
@@ -78,7 +96,7 @@ class JarvisNotificationListener : NotificationListenerService() {
         val isMessaging = sbn.packageName in messagingApps
         
         val sender = if (isMessaging) {
-            extras.getCharSequence(Notification.EXTRA_SENDER_TEXT)?.toString()
+            extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
         } else null
         
         return JarvisNotification(
@@ -149,17 +167,4 @@ class JarvisNotificationListener : NotificationListenerService() {
         val isMessaging: Boolean,
         val sender: String?
     )
-    
-    companion object {
-        private val messagingApps = listOf(
-            "com.whatsapp",
-            "com.google.android.apps.messaging",
-            "com.samsung.android.messaging",
-            "com.instagram.android",
-            "com.facebook.orca",
-            "org.telegram.messenger",
-            "com.slack",
-            "com.discord"
-        )
-    }
 }

@@ -9,10 +9,12 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import com.openjarvis.AssistantUpgrade
 import java.util.Locale
 
 class WakeWordDetector(private val context: Context) {
 
+    private val assistantUpgrade = AssistantUpgrade(context)
     private var speechRecognizer: SpeechRecognizer? = null
     private var intent: Intent? = null
     private var onWakeWordDetectedCallback: (() -> Unit)? = null
@@ -76,7 +78,7 @@ class WakeWordDetector(private val context: Context) {
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (matches != null) {
                     for (match in matches) {
-                        if (match.contains("opendroid", ignoreCase = true) || match.contains("open droid", ignoreCase = true)) {
+                        if (assistantUpgrade.isWakeWord(match)) {
                             triggerWakeWord()
                             break
                         }
@@ -89,7 +91,7 @@ class WakeWordDetector(private val context: Context) {
                 val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (matches != null) {
                     for (match in matches) {
-                        if (match.contains("opendroid", ignoreCase = true) || match.contains("open droid", ignoreCase = true)) {
+                        if (assistantUpgrade.isWakeWord(match)) {
                             triggerWakeWord()
                             break
                         }

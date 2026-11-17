@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
+import com.openjarvis.AssistantUpgrade
 import com.openjarvis.accessibility.JarvisAccessibilityService
 import com.openjarvis.accessibility.ScreenReader
 import com.openjarvis.graphify.AnalysisEngine
@@ -26,10 +27,10 @@ import kotlinx.coroutines.sync.withLock
 
 class AgentCore(private val context: Context) {
 
+    private val assistantUpgrade = AssistantUpgrade(context)
     private val graphifyRepo = GraphifyRepository(context)
     private val analysisEngine = AnalysisEngine(context)
     private val universalAdapter = UniversalAdapter(context)
-    private val screenReader = ScreenReader(context)
     private val visionModule = VisionModule.getInstance(context)
     private val taskRouter = TaskRouter(context)
     private val appAnalyzer = AppAnalyzer(context)
@@ -40,9 +41,10 @@ class AgentCore(private val context: Context) {
 
     private val _state = MutableStateFlow<AgentState>(AgentState.Idle)
     val state: StateFlow<AgentState> = _state
+    private var commandFeedbackListener: ((String) -> Unit)? = null
 
     private val systemPrompt = """
-You are Open Jarvis — an Android device control AI agent.
+You are {ASSISTANT_NAME} — an Android device control AI agent.
 The user gives you a cleanCommand in natural language.
 You must respond with ONLY a valid JSON array of actions. No explanation. No markdown fences. No preamble. Pure JSON array only.
 
@@ -82,7 +84,17 @@ RULES:
 - If a task is impossible to do safely, return: [{"action":"error","message":"reason"}]
 """.trimIndent()
 
-fun executeTask(cleanCommand: String) {
+    fun setCommandFeedbackListener(listener: ((String) -> Unit)?) {
+        commandFeedbackListener = listener
+    }
+
+    fun executeTask(cleanCommand: String) {
+        assistantUpgrade.handleCommand(cleanCommand)?.let { response ->
+            _state.value = AgentState.Done(response)
+            commandFeedbackListener?.invoke(response)
+            return
+        }
+
         workingMemory = TaskWorkingMemory()
         
         scope.launch {
@@ -92,7 +104,7 @@ fun executeTask(cleanCommand: String) {
                     when (sanitized) {
                         is PromptSanitizer.SanitizeResult.Rejected -> {
                             _state.value = AgentState.Error(sanitized.reason)
-                            return@taskMutex.withLock
+                            return@withLock
                         }
                         is PromptSanitizer.SanitizeResult.Suspicious -> {
                             _state.value = AgentState.Running("analyzing...")
@@ -113,14 +125,21 @@ fun executeTask(cleanCommand: String) {
                 _state.value = AgentState.Running("reading screen...")
                 
                 val screenText = withContext(Dispatchers.IO) {
-                    screenReader.extractAllText()
+                    readScreenText()
                 }
                 
                 _state.value = AgentState.Running("getting context...")
                 
                 val memoryContext = graphifyRepo.buildMemoryContext(cleanCommand)
                 
-                val fullSystem = systemPrompt
+                val persona = assistantUpgrade.activePersona
+                val personaInstructions = """
+                    ${persona.systemPrompt}
+                    Your current assistant name is ${persona.displayName}.
+                    Keep your character voice in mind while following the required action JSON format below.
+                """.trimIndent()
+                val fullSystem = "$personaInstructions\n\n$systemPrompt"
+                    .replace("{ASSISTANT_NAME}", persona.displayName)
                     .replace("{SCREEN_OCR}", screenText.take(2000))
                     .replace("{APP_REASONING}", plan.reasoning)
                     .replace("{AI_APPS}", getInstalledAIApps())
@@ -164,7 +183,7 @@ fun executeTask(cleanCommand: String) {
                         executeActions(actions)
                         
                         graphifyRepo.logTask(
-                            cleanCommand = cleanCommand,
+                            command = cleanCommand,
                             result = "success",
                             provider = universalAdapter.getProviderName(),
                             latencyMs = latency
@@ -189,6 +208,7 @@ fun executeTask(cleanCommand: String) {
             } catch (e: Exception) {
                 _state.value = AgentState.Error(e.message ?: "Unknown error")
                 graphifyRepo.logTask(cleanCommand, "failed: ${e.message}", "", 0)
+            }
             }
         }
     }
@@ -269,7 +289,7 @@ fun executeTask(cleanCommand: String) {
                 }
                 Action.EXTRACT_TEXT -> {
                     val outputKey = action.outputKey ?: "page_text"
-                    val text = screenReader.extractAllText()
+                    val text = readScreenText()
                     workingMemory.set(outputKey, text)
                 }
                 Action.ERROR -> {
@@ -281,6 +301,9 @@ fun executeTask(cleanCommand: String) {
             kotlinx.coroutines.delay(500)
         }
     }
+
+    private fun readScreenText(): String =
+        JarvisAccessibilityService.instance?.let { ScreenReader(it).extractAllText() }.orEmpty()
 
     private fun findPackageByLabel(label: String): String? {
         val pm = context.packageManager

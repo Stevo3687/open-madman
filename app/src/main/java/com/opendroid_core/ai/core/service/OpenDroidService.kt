@@ -1,6 +1,7 @@
 // Modified for Open Jarvis: package namespace remapped from com.opendroid to com.opendroid_core. Copyright 2026 OpenDroid Contributors.
 package com.opendroid_core.ai.core.service
 
+import com.openjarvis.AssistantUpgrade
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -44,6 +45,7 @@ class OpenDroidService : Service() {
     lateinit var mcpServer: McpServer
 
     private lateinit var wakeWordDetector: WakeWordDetector
+    private lateinit var assistantUpgrade: AssistantUpgrade
     private lateinit var speechRecognitionEngine: SpeechRecognitionEngine
     private lateinit var textToSpeechEngine: TextToSpeechEngine
 
@@ -71,6 +73,7 @@ class OpenDroidService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        assistantUpgrade = AssistantUpgrade(this)
 
         // Start Foreground Notification. A refused start (boot on Android 15, or a
         // sticky restart from the background) stops the service instead of crashing
@@ -167,8 +170,7 @@ class OpenDroidService : Service() {
 
     private fun startWakeWordDetection() {
         wakeWordDetector.startListening {
-            // Wake word detected! Prompt user with a sound or greeting and start listing for query
-            textToSpeechEngine.speak("OpenDroid online.")
+            textToSpeechEngine.speak("${assistantUpgrade.activePersona.displayName} online.")
             startListeningForQuery()
         }
     }
@@ -183,11 +185,16 @@ class OpenDroidService : Service() {
         // Start speech recognizer for query input
         speechRecognitionEngine.startListening(
             onResult = { query ->
-                agentLoop.processQuery(query, this)
+                val localResponse = assistantUpgrade.handleCommand(query)
+                if (localResponse != null) {
+                    textToSpeechEngine.speak(localResponse)
+                } else {
+                    agentLoop.processQuery(query, this)
+                }
                 // Resume wake word detection only if floating button is disabled
                 if (!showFloatingButton) {
                     wakeWordDetector.startListening {
-                        textToSpeechEngine.speak("OpenDroid online.")
+                        textToSpeechEngine.speak("${assistantUpgrade.activePersona.displayName} online.")
                         startListeningForQuery()
                     }
                 } else {
@@ -199,7 +206,7 @@ class OpenDroidService : Service() {
                 // Resume wake word detection only if floating button is disabled
                 if (!showFloatingButton) {
                     wakeWordDetector.startListening {
-                        textToSpeechEngine.speak("OpenDroid online.")
+                        textToSpeechEngine.speak("${assistantUpgrade.activePersona.displayName} online.")
                         startListeningForQuery()
                     }
                 }
@@ -266,9 +273,10 @@ class OpenDroidService : Service() {
     }
 
     private fun createNotification(): Notification {
+        val activeName = assistantUpgrade.activePersona.displayName
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("OpenDroid Active")
-            .setContentText("Listening for wake word 'OpenDroid'")
+            .setContentTitle("$activeName Active")
+            .setContentText("Listening for wake word '$activeName'")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)

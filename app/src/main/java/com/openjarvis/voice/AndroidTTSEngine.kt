@@ -3,11 +3,13 @@ package com.openjarvis.voice
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import com.openjarvis.AssistantUpgrade
 import java.util.Locale
 import java.util.UUID
 
 class AndroidTTSEngine(private val context: Context) {
 
+    private val assistantUpgrade = AssistantUpgrade(context)
     private var tts: TextToSpeech? = null
     private var isReady = false
     private var speechRate = 1.05f
@@ -18,8 +20,7 @@ class AndroidTTSEngine(private val context: Context) {
             if (status == TextToSpeech.SUCCESS) {
                 isReady = true
                 tts?.language = Locale.US
-                tts?.setSpeechRate(speechRate)
-                tts?.setPitch(pitch)
+                applyActivePersonaVoice()
                 
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {}
@@ -32,6 +33,7 @@ class AndroidTTSEngine(private val context: Context) {
 
     fun speak(text: String) {
         if (!isReady) return
+        applyActivePersonaVoice()
         
         val clean = text
             .replace(Regex("\\[\\{.*?\\}\\]"), "")
@@ -46,6 +48,7 @@ class AndroidTTSEngine(private val context: Context) {
 
     fun speakQueued(text: String) {
         if (!isReady) return
+        applyActivePersonaVoice()
         
         val clean = text
             .replace(Regex("\\[\\{.*?\\}\\]"), "")
@@ -70,6 +73,12 @@ class AndroidTTSEngine(private val context: Context) {
     fun setPitch(pitchValue: Float) {
         pitch = pitchValue.coerceIn(0.5f, 2.0f)
         tts?.setPitch(pitch)
+    }
+
+    private fun applyActivePersonaVoice() {
+        val persona = assistantUpgrade.activePersona
+        setPitch(persona.pitch)
+        setSpeechRate(persona.speechRate)
     }
 
     fun getSpeechRate(): Float = speechRate

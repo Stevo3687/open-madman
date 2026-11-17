@@ -1,5 +1,6 @@
 package com.openjarvis.ui
 
+import com.openjarvis.AssistantUpgrade
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -37,6 +38,7 @@ class OverlayService : Service() {
     private lateinit var voiceManager: VoiceManager
     private lateinit var graphifyRepo: GraphifyRepository
     private lateinit var socketServer: SocketServer
+    private lateinit var assistantUpgrade: AssistantUpgrade
     private var stateCollectJob: Job? = null
     private var recentTasks = emptyList<TaskNode>()
     
@@ -47,6 +49,8 @@ class OverlayService : Service() {
         
         agentCore = AgentCore(this)
         voiceManager = VoiceManager(this)
+        assistantUpgrade = AssistantUpgrade(this)
+        agentCore.setCommandFeedbackListener(voiceManager::speak)
         graphifyRepo = GraphifyRepository(this)
         socketServer = SocketServer(this, agentCore, graphifyRepo)
         
@@ -78,11 +82,6 @@ class OverlayService : Service() {
             }
         }
         
-        try {
-            voiceManager.initialize()
-        } catch (e: Exception) {
-            // Voice initialization
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -118,7 +117,7 @@ class OverlayService : Service() {
         )
         
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.notification_title))
+            .setContentTitle("${assistantUpgrade.activePersona.displayName} Active")
             .setContentText(getString(R.string.notification_text))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)

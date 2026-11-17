@@ -4,6 +4,7 @@ package com.opendroid_core.ai.core.voice
 import android.content.Context
 import android.media.MediaPlayer
 import android.speech.tts.TextToSpeech
+import com.openjarvis.AssistantUpgrade
 import com.opendroid_core.ai.data.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +33,7 @@ class TextToSpeechEngine(
     dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : TextToSpeech.OnInitListener {
 
+    private val assistantUpgrade = AssistantUpgrade(context)
     private var tts: TextToSpeech? = null
     private var isInitialized = false
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -76,6 +78,7 @@ class TextToSpeechEngine(
             val result = tts?.setLanguage(Locale.getDefault())
             if (result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED) {
                 isInitialized = true
+                applyActivePersonaVoice()
             }
         }
     }
@@ -105,11 +108,19 @@ class TextToSpeechEngine(
             // ElevenLabs fetch fails, and must not turn into local speech.
             if (isInitialized && generation.get() == speechGeneration) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    applyActivePersonaVoice()
                     tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
                 }
             }
         }
+
         return utteranceId
+    }
+
+    private fun applyActivePersonaVoice() {
+        val persona = assistantUpgrade.activePersona
+        tts?.setPitch(persona.pitch)
+        tts?.setSpeechRate(persona.speechRate)
     }
 
     private fun playElevenLabsTts(
